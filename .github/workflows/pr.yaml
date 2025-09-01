@@ -1,0 +1,91 @@
+name: Update App Config and Trigger Test-CD
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  update-app:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # to push commits to PR
+      pull-requests: write # to update PR
+      actions: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Parse new app from config/application.yaml
+        id: parse
+        run: |
+          python <<'EOF'
+          import yaml, os
+          with open("config/application.yaml") as f:
+              data = yaml.safe_load(f)
+          apps = data.get("applications", [])
+          latest = apps[-1] if apps else {}
+          app = latest.get("app")
+          envs = latest.get("envs", [])
+          if not app or not envs:
+              raise ValueError("App name or envs missing in application.yaml")
+          print(f"Found app={app}, envs={envs}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"app={app}\n")
+              out.write(f"envs={' '.join(envs)}\n")
+          EOF
+
+      - name: Run abc.py for this repo
+        run: |
+          python scripts/abc.py --app "${{ steps.parse.outputs.app }}" --envs ${{ steps.parse.outputs.envs }}
+
+      - name: Commit changes back to PR
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git add .
+          git commit -m "chore: update app config for ${{ steps.parse.outputs.app }}" || echo "No changes to commit"
+          git push origin HEAD:${{ github.head_ref }}
+
+      - name: Checkout test-cd repo
+        uses: actions/checkout@v4
+        with:
+          repository: Utkarshsaini01/test-cd-1  # 🔴 change this
+          token: ${{ secrets.GH_PAT }}        # 🔴 use GH_PAT since GITHUB_TOKEN won’t work cross-repo
+          path: test-cd-1
+
+      - name: Run abc.py in test-cd repo
+        run: |
+          cd test-cd-1
+          python scripts/abc.py --app "${{ steps.parse.outputs.app }}" --envs ${{ steps.parse.outputs.envs }}
+
+      - name: Commit & push in test-cd
+        run: |
+          cd test-cd-1
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git checkout -b update-${{ steps.parse.outputs.app }}-${{ github.run_id }}
+          git add .
+          git commit -m "feat: add app ${{ steps.parse.outputs.app }} with envs"
+          git push origin HEAD
+
+      - name: Create PR in test-cd
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}   # 🔴 required for creating PR cross-repo
+        run: |
+          gh pr create \
+            --repo Utkarshsaini01/test-cd-1 \
+            --head update-${{ steps.parse.outputs.app }}-${{ github.run_id }} \
+            --base main \
+            --title "Add app ${{ steps.parse.outputs.app }}" \
+            --body "Automatically created by workflow"
