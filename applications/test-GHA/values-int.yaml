@@ -1,0 +1,2 @@
+config:
+  applications-test-gha-aws:manage-app: "true"
