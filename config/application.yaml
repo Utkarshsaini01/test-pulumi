@@ -1,2 +1,5 @@
 applications:
-  
+  - app: test-GHA
+    envs:
+      - dev
+      - int
