@@ -1,0 +1,2 @@
+config:
+  applications-test-one-aws:manage-app: "true"

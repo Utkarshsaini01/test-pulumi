@@ -1,0 +1,110 @@
+name: App Generator
+
+on:
+  pull_request:
+    paths:
+      - "config/application.yaml"
+
+jobs:
+  generate-app:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # we need history for diffs
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install deps
+        run: pip install pyyaml
+
+      - name: Detect new apps
+        id: detect
+        run: |
+          echo "Detecting newly added apps..."
+          git diff origin/${{ github.base_ref }}...HEAD -- config/application.yaml > changes.diff
+          echo "Changes:"
+          cat changes.diff
+
+          python <<'EOF'
+          import yaml, sys, os, re, subprocess
+
+          # load old and new versions
+          base = subprocess.check_output(
+              ["git", "show", f"origin/${{ github.base_ref }}:config/application.yaml"]
+          ).decode()
+          head = open("config/application.yaml").read()
+
+          base_apps = {a["app"] for a in yaml.safe_load(base).get("applications", [])}
+          head_apps = {a["app"] for a in yaml.safe_load(head).get("applications", [])}
+
+          new_apps = [a for a in yaml.safe_load(head).get("applications", []) if a["app"] not in base_apps]
+
+          if not new_apps:
+              print("::set-output name=apps::")
+              sys.exit(0)
+
+          # pass envs too
+          apps_str = ";".join([f"{a['app']}|" + ",".join(a.get("envs", [])) for a in new_apps])
+          print(f"::set-output name=apps::{apps_str}")
+          EOF
+
+      - name: Run abc.py and commit changes
+        if: steps.detect.outputs.apps != ''
+        run: |
+          IFS=';' read -ra APPS <<< "${{ steps.detect.outputs.apps }}"
+          for app_entry in "${APPS[@]}"; do
+            APP_NAME=$(echo $app_entry | cut -d'|' -f1)
+            ENVS=$(echo $app_entry | cut -d'|' -f2 | tr ',' ' ')
+            echo "Generating app: $APP_NAME with envs: $ENVS"
+            python scripts/abc.py -a "$APP_NAME" -e $ENVS
+          done
+
+          git config user.name "Utkarshsaini01"
+          git config user.email "sainiutkarsh01@gmail.com"
+          git add applications/
+          git commit -m "chore: generate app configs" || echo "No changes"
+          git push
+
+      - name: Checkout test-cd repo
+        if: steps.detect.outputs.apps != ''
+        uses: actions/checkout@v3
+        with:
+          repository: Utkarshsaini01/test-cd-1
+          path: test-cd-1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate in test-cd and create PR
+        if: steps.detect.outputs.apps != ''
+        run: |
+          cd test-cd-1
+          IFS=';' read -ra APPS <<< "${{ steps.detect.outputs.apps }}"
+          for app_entry in "${APPS[@]}"; do
+            APP_NAME=$(echo $app_entry | cut -d'|' -f1)
+            ENVS=$(echo $app_entry | cut -d'|' -f2 | tr ',' ' ')
+            python scripts/abc.py -a "$APP_NAME" -e $ENVS
+          done
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          BRANCH="app-gen-${{ github.run_id }}"
+          git checkout -b $BRANCH
+          git add applications/
+          git commit -m "Add new apps from ${GITHUB_REPOSITORY}"
+          git push origin $BRANCH
+
+          gh pr create \
+            --title "Add new apps from ${GITHUB_REPOSITORY}" \
+            --body "Automated app generation" \
+            --base main \
+            --head $BRANCH
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

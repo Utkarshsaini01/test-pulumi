@@ -1,0 +1,2 @@
+config:
+  applications-test-pulumi-aws:manage-app: "true"
