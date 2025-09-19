@@ -1,4 +1,9 @@
 .github/workflows/pr.yaml
+.gitignore
+applications/myapp/main.py
+applications/myapp/values-dev.yaml
+applications/myapp/values.yaml
 config/apps.yaml
+files_changed.txt
 scripts/handle_new_apps.py
 scripts/new_app.py
