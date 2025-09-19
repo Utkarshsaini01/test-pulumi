@@ -75,7 +75,10 @@ def gh_pr_create(repo, head_branch, base_branch, title, body, gh_token_env="GH_P
 
 def gh_pr_comment(repo, pr_number, body, gh_token_env="GITHUB_TOKEN"):
     env = os.environ.copy()
-    env['GH_TOKEN'] = os.environ.get(gh_token_env, env.get('GH_TOKEN', ''))
+    token = os.environ.get(gh_token_env)
+    if not token:
+        raise RuntimeError(f"{gh_token_env} is not set in environment")
+    env['GH_TOKEN'] = token
     cmd = f'gh pr comment {pr_number} --repo {repo} --body "{body}"'
     run(cmd, env=env)
 

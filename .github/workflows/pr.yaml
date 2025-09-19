@@ -57,7 +57,7 @@ jobs:
         if: steps.check_changed.outputs.changed == 'true'
         env:
           GH_PAT: ${{ secrets.GH_PAT }}            # personal access token with repo permissions for cross-repo PRs
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}# default token for actions (same repo operations)
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # default token for actions (same repo operations)
           INFRA_REPO_SSH: "git@github.com:Utkarshsaini01/test_1.git"  # change to actual repo
           ADDONS_REPO_SSH: "git@github.com:Utkarshsaini01/addons.git"    # change to actual repo
           INFRA_REPO: "Utkarshsaini01/test-cd-1"
