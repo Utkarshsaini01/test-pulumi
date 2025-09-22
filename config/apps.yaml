@@ -1,2 +1,5 @@
 applications:
-  
+  myapp:
+    envs: [dev]
+    jira_ticket: proj-098
+    ecr-repo: org/myapp
