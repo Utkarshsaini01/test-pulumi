@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 
 BASE_APP = "test-one"
-BASE_DIR = Path("applications") / BASE_APP
+BASE_DIR = Path("../applications") / BASE_APP
 
 
 def replace_variations(text: str, old: str, new: str) -> str:
@@ -33,7 +33,7 @@ def generate_app(app_name: str, envs: list[str]):
     if not BASE_DIR.exists():
         raise FileNotFoundError(f"Base app {BASE_APP} not found under applications/")
 
-    target_dir = Path("applications") / app_name
+    target_dir = Path("../applications") / app_name
     target_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy main.py

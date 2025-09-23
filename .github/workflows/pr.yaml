@@ -3,6 +3,8 @@ name: Detect new apps and trigger cross-repo scripts
 on:
   pull_request:
     types: [opened, reopened, synchronize]
+    paths:
+      - "config/apps.yaml"
 
 permissions:
   contents: write
@@ -30,35 +32,31 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Configure Git for deploy repo
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Utkarshsaini01/test-pulumi.git
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml
+          pip install pyyaml pyjwt cryptography requests
 
-      - name: Check if config/apps.yaml changed in this PR
-        id: check_changed
-        run: |
-          # fetch base branch to compare
-          git fetch origin ${{ github.base_ref }} --depth=1
-          git diff --name-only origin/${{ github.base_ref }}...HEAD > files_changed.txt || true
-          if grep -q '^config/apps.yaml$' files_changed.txt; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run automation if apps.yaml changed
-        if: steps.check_changed.outputs.changed == 'true'
+      - name: Run new app handle script
+        working-directory: scripts
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}            # personal access token with repo permissions for cross-repo PRs
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}# default token for actions (same repo operations)
+          APP_ID: ${{ secrets.GH_APP_ID }}
+          INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
+          APP_KEY: ${{ secrets.GH_APP_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # default token for actions (same repo operations)
           INFRA_REPO_SSH: "git@github.com:Utkarshsaini01/test_1.git"  # change to actual repo
           ADDONS_REPO_SSH: "git@github.com:Utkarshsaini01/addons.git"    # change to actual repo
-          INFRA_REPO: "Utkarshsaini01/test_1"
+          INFRA_REPO: "Utkarshsaini01/test-cd-1"
           ADDONS_REPO: "Utkarshsaini01/addons"
         run: |
           # run the Python automation script that compares base and head and does everything
-          python scripts/handle_new_apps.py \
+          python handle_new_apps.py \
             --base-branch ${PR_BASE_REF} \
             --head-branch ${PR_HEAD_REF} \
             --deploy-repo $DEPLOY_REPO \
